@@ -170,8 +170,13 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Budget Shopping Ledger</h1>
-  <div class="sub">every purchase, logged and weighed against the budget</div>
+  <div class="row" style="justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+    <div>
+      <h1>Budget Shopping Ledger</h1>
+      <div class="sub">every purchase, logged and weighed against the budget</div>
+    </div>
+    <button id="clearAllBtn" class="btn-danger" style="white-space:nowrap;">Clear all data</button>
+  </div>
 
   <div class="card">
     <h2>Monthly budget</h2>
@@ -242,6 +247,19 @@
   var BUDGET_KEY = "budget_ledger_budget_v1";
 
   var bills = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  var FALLBACK_COLOR = "#5B6B5E";
+
+  // Normalize any category not in the current list (e.g. saved under an
+  // older category set) to "Other" so it still renders correctly.
+  bills.forEach(function (b) {
+    b.items.forEach(function (it) {
+      if (CATEGORIES.indexOf(it.category) === -1) it.category = "Other";
+    });
+  });
+  save();
+
+  function catColor(c) { return CAT_COLORS[c] || FALLBACK_COLOR; }
+
   var pieChartInstance = null, barChartInstance = null;
 
   function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -305,6 +323,17 @@
     save();
     el("mStore").value = ""; el("mDate").value = todayISO();
     el("manualRows").innerHTML = ""; el("manualRows").appendChild(newManualRow());
+    render();
+  });
+
+  el("clearAllBtn").addEventListener("click", function () {
+    if (bills.length === 0 && !budgetInput.value) return;
+    var ok = confirm("Clear all bills and the budget? This can't be undone.");
+    if (!ok) return;
+    bills = [];
+    save();
+    localStorage.removeItem(BUDGET_KEY);
+    budgetInput.value = "";
     render();
   });
 
@@ -380,7 +409,7 @@
     el("tableHd").textContent = "All items (" + allItems.length + ")";
     el("itemsBody").innerHTML = allItems.map(function (it) {
       return "<tr><td>" + it.date + "</td><td>" + esc(it.store) + "</td><td>" + esc(it.name) + "</td>" +
-        "<td><span class='dot' style='background:" + CAT_COLORS[it.category] + "'></span>" + it.category + "</td>" +
+        "<td><span class='dot' style='background:" + catColor(it.category) + "'></span>" + it.category + "</td>" +
         "<td style='text-align:right'>" + it.quantity + "</td>" +
         "<td style='text-align:right'>" + money(it.unitPrice) + "</td>" +
         "<td style='text-align:right;font-weight:700'>" + money(it.lineTotal) + "</td></tr>";
@@ -414,7 +443,7 @@
       type: "doughnut",
       data: {
         labels: catData.map(function (d) { return d.name; }),
-        datasets: [{ data: catData.map(function (d) { return d.value; }), backgroundColor: catData.map(function (d) { return CAT_COLORS[d.name]; }), borderColor: "#F5F9F1", borderWidth: 1 }]
+        datasets: [{ data: catData.map(function (d) { return d.value; }), backgroundColor: catData.map(function (d) { return catColor(d.name); }), borderColor: "#F5F9F1", borderWidth: 1 }]
       },
       options: {
         plugins: {
@@ -435,7 +464,7 @@
         var sum = b.items.filter(function (it) { return it.category === c; }).reduce(function (s, it) { return s + it.quantity * it.unitPrice; }, 0);
         return Math.round(sum * 100) / 100;
       });
-      return { label: c, data: data, backgroundColor: CAT_COLORS[c] };
+      return { label: c, data: data, backgroundColor: catColor(c) };
     }).filter(function (ds) { return ds.data.some(function (v) { return v > 0; }); });
 
     barChartInstance = new Chart(ctx, {

@@ -152,6 +152,13 @@
 
   .panel { background: #F5F9F1; border: 1px solid var(--panel-border); border-radius: 8px; padding: 14px 12px; margin-bottom: 18px; }
   .panel h3 { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-muted); margin: 0 0 8px 6px; font-weight: 600; }
+  .chartWrap { position: relative; height: 220px; width: 100%; }
+  .breakdown { margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .breakdown .bRow { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-top: 1px solid #dfe9d8; }
+  .breakdown .bRow:first-child { border-top: none; }
+  .breakdown .bRow .bName { flex: 1; display: flex; align-items: center; gap: 6px; color: var(--ink); }
+  .breakdown .bRow .bVal { font-weight: 700; color: var(--ink); }
+  .breakdown .bRow .bPct { color: var(--ink-muted); width: 46px; text-align: right; }
 
   table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }
   th { text-align: left; color: var(--ink-muted); font-weight: 600; padding: 8px 12px; }
@@ -213,11 +220,13 @@
       <div>
         <div class="panel">
           <h3>Spend by category</h3>
-          <canvas id="pieChart" height="220"></canvas>
+          <div class="chartWrap"><canvas id="pieChart"></canvas></div>
+          <div class="breakdown" id="pieBreakdown"></div>
         </div>
         <div class="panel">
           <h3>Spend per bill, by category</h3>
-          <canvas id="barChart" height="220"></canvas>
+          <div class="chartWrap"><canvas id="barChart"></canvas></div>
+          <div class="breakdown" id="barBreakdown"></div>
         </div>
       </div>
     </div>
@@ -415,7 +424,7 @@
         "<td style='text-align:right;font-weight:700'>" + money(it.lineTotal) + "</td></tr>";
     }).join("");
 
-    drawPieChart(catData);
+    drawPieChart(catData, spent);
     drawBarChart(bills);
   }
 
@@ -436,52 +445,101 @@
       "</div>";
   }
 
-  function drawPieChart(catData) {
-    var ctx = el("pieChart").getContext("2d");
-    if (pieChartInstance) pieChartInstance.destroy();
-    pieChartInstance = new Chart(ctx, {
-      type: "doughnut",
-      data: {
-        labels: catData.map(function (d) { return d.name; }),
-        datasets: [{ data: catData.map(function (d) { return d.value; }), backgroundColor: catData.map(function (d) { return catColor(d.name); }), borderColor: "#F5F9F1", borderWidth: 1 }]
-      },
-      options: {
-        plugins: {
-          legend: { position: "bottom", labels: { color: "#1E2A20", font: { size: 11, family: "Inter" }, boxWidth: 10 } },
-          tooltip: { callbacks: { label: function (ctx) { return ctx.label + ": " + money(ctx.parsed); } } }
+  function drawPieChart(catData, spentTotal) {
+    var breakdownEl = el("pieBreakdown");
+    breakdownEl.innerHTML = catData.map(function (d) {
+      var pct = spentTotal > 0 ? Math.round((d.value / spentTotal) * 100) : 0;
+      return "<div class='bRow'>" +
+        "<span class='bName'><span class='dot' style='background:" + catColor(d.name) + "'></span>" + d.name + "</span>" +
+        "<span class='bVal'>" + money(d.value) + "</span>" +
+        "<span class='bPct'>" + pct + "%</span>" +
+        "</div>";
+    }).join("") || "<div class='bRow'><span class='bName'>No spend recorded yet</span></div>";
+
+    try {
+      var ctx = el("pieChart").getContext("2d");
+      if (pieChartInstance) pieChartInstance.destroy();
+      if (catData.length === 0) return;
+      pieChartInstance = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+          labels: catData.map(function (d) { return d.name; }),
+          datasets: [{ data: catData.map(function (d) { return d.value; }), backgroundColor: catData.map(function (d) { return catColor(d.name); }), borderColor: "#F5F9F1", borderWidth: 1 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {
+                color: "#1E2A20", font: { size: 11, family: "Inter" }, boxWidth: 10,
+                generateLabels: function (chart) {
+                  return chart.data.labels.map(function (label, i) {
+                    var val = chart.data.datasets[0].data[i];
+                    return {
+                      text: label + " — " + money(val),
+                      fillStyle: chart.data.datasets[0].backgroundColor[i],
+                      strokeStyle: chart.data.datasets[0].backgroundColor[i],
+                      index: i
+                    };
+                  });
+                }
+              }
+            },
+            tooltip: { callbacks: { label: function (ctx) { return ctx.label + ": " + money(ctx.parsed); } } }
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      console.error("Pie chart failed to render:", e);
+    }
   }
 
   function drawBarChart(bills) {
-    var ctx = el("barChart").getContext("2d");
-    if (barChartInstance) barChartInstance.destroy();
     var ordered = bills.slice().reverse();
-    var labels = ordered.map(function (b) { return b.store; });
-    var datasets = CATEGORIES.map(function (c) {
-      var data = ordered.map(function (b) {
-        var sum = b.items.filter(function (it) { return it.category === c; }).reduce(function (s, it) { return s + it.quantity * it.unitPrice; }, 0);
-        return Math.round(sum * 100) / 100;
-      });
-      return { label: c, data: data, backgroundColor: catColor(c) };
-    }).filter(function (ds) { return ds.data.some(function (v) { return v > 0; }); });
+    var breakdownEl = el("barBreakdown");
+    breakdownEl.innerHTML = ordered.map(function (b) {
+      return "<div class='bRow'>" +
+        "<span class='bName'>" + esc(b.store) + " <span style='color:var(--ink-muted)'>(" + b.date + ")</span></span>" +
+        "<span class='bVal'>" + money(b.total) + "</span>" +
+        "</div>";
+    }).join("") || "<div class='bRow'><span class='bName'>No bills recorded yet</span></div>";
 
-    barChartInstance = new Chart(ctx, {
-      type: "bar",
-      data: { labels: labels, datasets: datasets },
-      options: {
-        responsive: true,
-        scales: {
-          x: { stacked: true, ticks: { color: "#5B6B5E", font: { size: 10 } }, grid: { color: "#d4e2cc" } },
-          y: { stacked: true, ticks: { color: "#5B6B5E", font: { size: 10 } }, grid: { color: "#d4e2cc" } }
-        },
-        plugins: {
-          legend: { labels: { color: "#1E2A20", font: { size: 10, family: "Inter" }, boxWidth: 10 } },
-          tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ": " + money(ctx.parsed.y); } } }
+    try {
+      var ctx = el("barChart").getContext("2d");
+      if (barChartInstance) barChartInstance.destroy();
+      if (ordered.length === 0) return;
+      var labels = ordered.map(function (b) { return b.store; });
+      var datasets = CATEGORIES.map(function (c) {
+        var data = ordered.map(function (b) {
+          var sum = b.items.filter(function (it) { return it.category === c; }).reduce(function (s, it) { return s + it.quantity * it.unitPrice; }, 0);
+          return Math.round(sum * 100) / 100;
+        });
+        return { label: c, data: data, backgroundColor: catColor(c) };
+      }).filter(function (ds) { return ds.data.some(function (v) { return v > 0; }); });
+
+      if (datasets.length === 0) return;
+
+      barChartInstance = new Chart(ctx, {
+        type: "bar",
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true, ticks: { color: "#5B6B5E", font: { size: 10 } }, grid: { color: "#d4e2cc" } },
+            y: { stacked: true, ticks: { color: "#5B6B5E", font: { size: 10 } }, grid: { color: "#d4e2cc" } }
+          },
+          plugins: {
+            legend: { labels: { color: "#1E2A20", font: { size: 10, family: "Inter" }, boxWidth: 10 } },
+            tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ": " + money(ctx.parsed.y); } } }
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      console.error("Bar chart failed to render:", e);
+    }
   }
 
   render();

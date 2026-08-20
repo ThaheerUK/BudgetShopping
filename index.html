@@ -1,0 +1,462 @@
+<!-- ============================================================
+  BUDGET SHOPPING LEDGER
+  Static, no build step. Chart.js via CDN. All data in the
+  visitor's own browser (localStorage) — no backend, no AI.
+  Save this file as index.html at the root of your repo for
+  GitHub Pages.
+============================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget Shopping Ledger</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --desk: #F4F0E4;
+    --paper: #E9F1E3;
+    --rule: #C3D6BC;
+    --margin-red: #B23A2E;
+    --ink: #1E2A20;
+    --ink-muted: #5B6B5E;
+    --ink-faint: #86937F;
+    --under: #2F6B4A;
+    --over: #B23A2E;
+    --warn: #B8862E;
+    --panel: #DEEAD7;
+    --panel-border: #b9cdb2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--desk);
+    font-family: 'Inter', sans-serif;
+    color: var(--ink);
+    padding: 32px 16px 60px;
+  }
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    background: var(--paper);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 27px,
+      var(--rule) 27px,
+      var(--rule) 28px
+    );
+    border: 1px solid #cdd9c6;
+    border-radius: 4px;
+    box-shadow: 0 18px 40px rgba(30,42,32,0.18);
+    padding: 30px 30px 30px 54px;
+    position: relative;
+  }
+  .wrap::before {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0; left: 34px;
+    width: 2px;
+    background: var(--margin-red);
+    opacity: 0.55;
+  }
+  h1 {
+    font-family: 'Source Serif 4', serif;
+    font-size: 30px;
+    font-weight: 700;
+    margin: 0 0 2px 0;
+    color: var(--ink);
+  }
+  .sub {
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 22px;
+  }
+  .card {
+    background: #F5F9F1;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 18px;
+    margin: 0 0 20px 0;
+  }
+  .card h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin: 0 0 12px 0;
+    font-weight: 600;
+  }
+  label { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-muted); display: block; margin-bottom: 4px; }
+  input, select {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--ink);
+    background: #ffffff;
+    border: 1px solid #c3d0bc;
+    border-radius: 4px;
+    padding: 8px 10px;
+    width: 100%;
+  }
+  input:focus, select:focus { outline: 2px solid var(--under); outline-offset: 1px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .row > .field { flex: 1 1 140px; }
+  button {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 16px;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--under); color: #F5F9F1; }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid #b9c9b2; }
+  .btn-danger { background: transparent; color: var(--over); border: 1px solid #e0bdb8; padding: 6px 10px; }
+
+  /* Budget summary */
+  .budgetTop { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+  .budgetTop .field { max-width: 180px; }
+  .barTrack { height: 16px; background: #d4e2cc; border-radius: 8px; overflow: hidden; border: 1px solid #b9cdb2; }
+  .barFill { height: 100%; transition: width .3s ease; }
+  .budgetMeta { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
+  .budgetMeta .status { font-weight: 700; }
+
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0; }
+  .stat { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px; padding: 12px 16px; flex: 1 1 140px; }
+  .stat .l { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; font-family: 'Inter', sans-serif; }
+  .stat .v { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 21px; color: var(--ink); margin-top: 4px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 22px; }
+  @media (max-width: 780px) { .grid { grid-template-columns: 1fr; } .wrap { padding-left: 40px; } .wrap::before { left: 22px; } }
+
+  .entry {
+    background: #F5F9F1;
+    border: 1px solid var(--panel-border);
+    border-left: 4px solid var(--under);
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    position: relative;
+  }
+  .entry .del { position: absolute; top: 8px; right: 8px; background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 14px; }
+  .entry .store { font-family: 'Source Serif 4', serif; font-weight: 700; font-size: 15px; }
+  .entry .meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-muted); margin: 2px 0 8px; }
+  .entry .items { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; border-top: 1px dashed #b9c9b2; padding-top: 6px; }
+  .entry .it { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .entry .it .name { color: var(--ink-muted); }
+  .entry .total { font-family: 'JetBrains Mono', monospace; font-weight: 700; display: flex; justify-content: space-between; font-size: 13px; margin-top: 6px; border-top: 1px solid #b9c9b2; padding-top: 6px; }
+
+  .panel { background: #F5F9F1; border: 1px solid var(--panel-border); border-radius: 8px; padding: 14px 12px; margin-bottom: 18px; }
+  .panel h3 { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-muted); margin: 0 0 8px 6px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }
+  th { text-align: left; color: var(--ink-muted); font-weight: 600; padding: 8px 12px; }
+  td { padding: 8px 12px; border-top: 1px solid #cdd9c6; color: var(--ink); }
+  .tableWrap { background: #F5F9F1; border: 1px solid var(--panel-border); border-radius: 8px; overflow: hidden; }
+  .tableWrap .hd { padding: 12px 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-muted); border-bottom: 1px solid var(--panel-border); }
+  .tableScroll { overflow-x: auto; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+  .manualRow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
+  .manualRow input, .manualRow select { flex: 1 1 120px; }
+
+  .empty { text-align: center; color: var(--ink-muted); font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 44px 20px; border: 1px dashed var(--panel-border); border-radius: 8px; background: #F5F9F1; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Budget Shopping Ledger</h1>
+  <div class="sub">every purchase, logged and weighed against the budget</div>
+
+  <div class="card">
+    <h2>Monthly budget</h2>
+    <div class="budgetTop">
+      <div class="field">
+        <label>Budget amount</label>
+        <input id="budgetInput" type="number" min="0" step="1" placeholder="e.g. 15000">
+      </div>
+    </div>
+    <div class="barTrack"><div class="barFill" id="barFill" style="width:0%; background:#2F6B4A;"></div></div>
+    <div class="budgetMeta">
+      <span id="budgetSpentLabel">Spent ₹0.00</span>
+      <span class="status" id="budgetStatusLabel">No budget set</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Add a bill</h2>
+    <div class="row">
+      <div class="field"><label>Store name</label><input id="mStore" placeholder="e.g. Whole Foods"></div>
+      <div class="field"><label>Date</label><input id="mDate" type="date"></div>
+    </div>
+    <div id="manualRows"></div>
+    <div class="row">
+      <button id="addRow" class="btn-ghost">+ Add item</button>
+      <button id="saveManual" class="btn-primary">Save bill</button>
+    </div>
+  </div>
+
+  <div id="statsBlock" class="hidden">
+    <div class="stats" id="stats"></div>
+    <div class="grid">
+      <div id="entries"></div>
+      <div>
+        <div class="panel">
+          <h3>Spend by category</h3>
+          <canvas id="pieChart" height="220"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Spend per bill, by category</h3>
+          <canvas id="barChart" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="tableWrap">
+      <div class="hd" id="tableHd">All items</div>
+      <div class="tableScroll">
+        <table>
+          <thead><tr><th>Date</th><th>Store</th><th>Item</th><th>Category</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Line total</th></tr></thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="emptyState" class="empty">No bills yet — add one above to start tracking against your budget.</div>
+</div>
+
+<script>
+(function () {
+  var CATEGORIES = ["Groceries","Electronics","Electrical","Appliances","Furniture","Household","Clothing","Personal Care","Stationery","Health & Pharmacy","Other"];
+  var CAT_COLORS = {
+    "Groceries": "#2F6B4A", "Electronics": "#2B4A6B", "Electrical": "#B8862E", "Appliances": "#6B4C74",
+    "Furniture": "#9B5B3E", "Household": "#7A5A2E", "Clothing": "#7A2E52", "Personal Care": "#1F7A72",
+    "Stationery": "#4A6C8C", "Health & Pharmacy": "#B23A2E", "Other": "#5B6B5E"
+  };
+  var STORAGE_KEY = "budget_ledger_bills_v1";
+  var BUDGET_KEY = "budget_ledger_budget_v1";
+
+  var bills = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  var pieChartInstance = null, barChartInstance = null;
+
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+  function todayISO() { return new Date().toISOString().slice(0, 10); }
+  function money(n) {
+    var v = Math.round((n || 0) * 100) / 100;
+    return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(bills)); }
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  // ---- budget ----
+  var budgetInput = el("budgetInput");
+  budgetInput.value = localStorage.getItem(BUDGET_KEY) || "";
+  budgetInput.addEventListener("input", function () {
+    localStorage.setItem(BUDGET_KEY, budgetInput.value);
+    renderBudget();
+  });
+
+  // ---- manual entry rows ----
+  function newManualRow() {
+    var row = document.createElement("div");
+    row.className = "manualRow";
+    row.innerHTML =
+      '<input class="mName" placeholder="Item name">' +
+      '<select class="mCat">' + CATEGORIES.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join("") + '</select>' +
+      '<input class="mQty" type="number" min="0" value="1" style="flex:0 1 70px" placeholder="Qty">' +
+      '<input class="mPrice" type="number" min="0" step="0.01" style="flex:0 1 90px" placeholder="Unit ₹">' +
+      '<button class="btn-danger rowDel">✕</button>';
+    row.querySelector(".rowDel").addEventListener("click", function () {
+      if (el("manualRows").children.length > 1) row.remove();
+    });
+    return row;
+  }
+  el("manualRows").appendChild(newManualRow());
+  el("addRow").addEventListener("click", function () { el("manualRows").appendChild(newManualRow()); });
+  el("mDate").value = todayISO();
+
+  el("saveManual").addEventListener("click", function () {
+    var rows = Array.prototype.slice.call(el("manualRows").children);
+    var items = [];
+    rows.forEach(function (r) {
+      var name = r.querySelector(".mName").value.trim();
+      if (!name) return;
+      items.push({
+        id: uid(), name: name,
+        category: r.querySelector(".mCat").value,
+        quantity: Number(r.querySelector(".mQty").value) || 1,
+        unitPrice: Number(r.querySelector(".mPrice").value) || 0
+      });
+    });
+    if (items.length === 0) return;
+    var total = items.reduce(function (s, it) { return s + it.quantity * it.unitPrice; }, 0);
+    bills.unshift({
+      id: uid(),
+      store: el("mStore").value.trim() || "Unknown Store",
+      date: el("mDate").value || todayISO(),
+      items: items, total: total
+    });
+    save();
+    el("mStore").value = ""; el("mDate").value = todayISO();
+    el("manualRows").innerHTML = ""; el("manualRows").appendChild(newManualRow());
+    render();
+  });
+
+  function deleteBill(id) {
+    bills = bills.filter(function (b) { return b.id !== id; });
+    save();
+    render();
+  }
+
+  function totalSpent() { return bills.reduce(function (s, b) { return s + b.total; }, 0); }
+
+  function renderBudget() {
+    var budget = Number(budgetInput.value) || 0;
+    var spent = totalSpent();
+    el("budgetSpentLabel").textContent = "Spent " + money(spent);
+    var fill = el("barFill");
+    var statusLabel = el("budgetStatusLabel");
+    if (budget <= 0) {
+      fill.style.width = "0%";
+      fill.style.background = "#2F6B4A";
+      statusLabel.textContent = "No budget set";
+      statusLabel.style.color = "var(--ink-muted)";
+      return;
+    }
+    var pct = Math.min(100, (spent / budget) * 100);
+    fill.style.width = pct + "%";
+    var remaining = budget - spent;
+    var color, label;
+    if (spent > budget) { color = "#B23A2E"; label = "Over by " + money(spent - budget); }
+    else if (pct >= 85) { color = "#B8862E"; label = money(remaining) + " left"; }
+    else { color = "#2F6B4A"; label = money(remaining) + " left"; }
+    fill.style.background = color;
+    statusLabel.textContent = label;
+    statusLabel.style.color = color;
+  }
+
+  function render() {
+    var hasBills = bills.length > 0;
+    el("statsBlock").classList.toggle("hidden", !hasBills);
+    el("emptyState").classList.toggle("hidden", hasBills);
+    renderBudget();
+    if (!hasBills) return;
+
+    var allItems = [];
+    bills.forEach(function (b) {
+      b.items.forEach(function (it) {
+        allItems.push({ id: it.id, name: it.name, category: it.category, quantity: it.quantity, unitPrice: it.unitPrice,
+          store: b.store, date: b.date, lineTotal: it.quantity * it.unitPrice });
+      });
+    });
+    allItems.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+
+    var spent = totalSpent();
+    var avgBill = bills.length ? spent / bills.length : 0;
+    var catTotals = {};
+    allItems.forEach(function (it) { catTotals[it.category] = (catTotals[it.category] || 0) + it.lineTotal; });
+    var catData = CATEGORIES.map(function (c) { return { name: c, value: Math.round((catTotals[c] || 0) * 100) / 100 }; })
+      .filter(function (d) { return d.value > 0; });
+    var topCategory = catData.length ? catData.reduce(function (a, b) { return b.value > a.value ? b : a; }).name : "—";
+
+    el("stats").innerHTML =
+      statHtml("Total spent", money(spent)) +
+      statHtml("Bills logged", bills.length) +
+      statHtml("Avg per bill", money(avgBill)) +
+      statHtml("Top category", topCategory);
+
+    el("entries").innerHTML = bills.map(entryHtml).join("");
+    bills.forEach(function (b) {
+      var btn = document.querySelector('[data-del="' + b.id + '"]');
+      if (btn) btn.addEventListener("click", function () { deleteBill(b.id); });
+    });
+
+    el("tableHd").textContent = "All items (" + allItems.length + ")";
+    el("itemsBody").innerHTML = allItems.map(function (it) {
+      return "<tr><td>" + it.date + "</td><td>" + esc(it.store) + "</td><td>" + esc(it.name) + "</td>" +
+        "<td><span class='dot' style='background:" + CAT_COLORS[it.category] + "'></span>" + it.category + "</td>" +
+        "<td style='text-align:right'>" + it.quantity + "</td>" +
+        "<td style='text-align:right'>" + money(it.unitPrice) + "</td>" +
+        "<td style='text-align:right;font-weight:700'>" + money(it.lineTotal) + "</td></tr>";
+    }).join("");
+
+    drawPieChart(catData);
+    drawBarChart(bills);
+  }
+
+  function statHtml(label, value) {
+    return "<div class='stat'><div class='l'>" + label + "</div><div class='v'>" + value + "</div></div>";
+  }
+
+  function entryHtml(bill) {
+    var itemsHtml = bill.items.map(function (it) {
+      return "<div class='it'><span class='name'>" + esc(it.name) + " ×" + it.quantity + "</span><span>" + money(it.quantity * it.unitPrice) + "</span></div>";
+    }).join("");
+    return "<div class='entry'>" +
+      "<button class='del' data-del='" + bill.id + "'>✕</button>" +
+      "<div class='store'>" + esc(bill.store) + "</div>" +
+      "<div class='meta'>" + bill.date + " · " + bill.items.length + " item" + (bill.items.length !== 1 ? "s" : "") + "</div>" +
+      "<div class='items'>" + itemsHtml + "</div>" +
+      "<div class='total'><span>TOTAL</span><span>" + money(bill.total) + "</span></div>" +
+      "</div>";
+  }
+
+  function drawPieChart(catData) {
+    var ctx = el("pieChart").getContext("2d");
+    if (pieChartInstance) pieChartInstance.destroy();
+    pieChartInstance = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: catData.map(function (d) { return d.name; }),
+        datasets: [{ data: catData.map(function (d) { return d.value; }), backgroundColor: catData.map(function (d) { return CAT_COLORS[d.name]; }), borderColor: "#F5F9F1", borderWidth: 1 }]
+      },
+      options: {
+        plugins: {
+          legend: { position: "bottom", labels: { color: "#1E2A20", font: { size: 11, family: "Inter" }, boxWidth: 10 } },
+          tooltip: { callbacks: { label: function (ctx) { return ctx.label + ": " + money(ctx.parsed); } } }
+        }
+      }
+    });
+  }
+
+  function drawBarChart(bills) {
+    var ctx = el("barChart").getContext("2d");
+    if (barChartInstance) barChartInstance.destroy();
+    var ordered = bills.slice().reverse();
+    var labels = ordered.map(function (b) { return b.store; });
+    var datasets = CATEGORIES.map(function (c) {
+      var data = ordered.map(function (b) {
+        var sum = b.items.filter(function (it) { return it.category === c; }).reduce(function (s, it) { return s + it.quantity * it.unitPrice; }, 0);
+        return Math.round(sum * 100) / 100;
+      });
+      return { label: c, data: data, backgroundColor: CAT_COLORS[c] };
+    }).filter(function (ds) { return ds.data.some(function (v) { return v > 0; }); });
+
+    barChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        scales: {
+          x: { stacked: true, ticks: { color: "#5B6B5E", font: { size: 10 } }, grid: { color: "#d4e2cc" } },
+          y: { stacked: true, ticks: { color: "#5B6B5E", font: { size: 10 } }, grid: { color: "#d4e2cc" } }
+        },
+        plugins: {
+          legend: { labels: { color: "#1E2A20", font: { size: 10, family: "Inter" }, boxWidth: 10 } },
+          tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ": " + money(ctx.parsed.y); } } }
+        }
+      }
+    });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
